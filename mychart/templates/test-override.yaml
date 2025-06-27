@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: security-override-test-{{ .Release.Name }} # Unique name
+  namespace: {{ .Release.Namespace }} # Deploy in the same namespace as the parent chart
+spec:
+  containers:
+    - name: how-did-this-get-here
+      image: busybox:latest # A common, lightweight image for testing
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "Attempting to run with overridden securityContext."
+          echo "User ID: $(id -u)"
+          echo "Effective Capabilities: $(capsh --print 2>/dev/null | grep 'Current:' | cut -d ':' -f 2)"
+          echo "Sleeping indefinitely to keep pod running..."
+          sleep infinity
+      securityContext:
+        # Attempt to run as root (UID 0)
+        runAsNonRoot: false
+        runAsUser: 0
+        # Allow privilege escalation
+        allowPrivilegeEscalation: true
+        # Add all possible capabilities
+        capabilities:
+          add:
+            - ALL
+          drop: [] # Ensure no capabilities are explicitly dropped by default
+        # Attempt to make the container privileged (very high risk)
+        privileged: true
+        # Attempt to mount host paths
+        # hostPath: / # This is a pod-level securityContext or volumeMount property, not directly under container.securityContext
+      volumeMounts:
+        - mountPath: /host # Where the host root will be mounted inside the container
+          name: host-root-volume
+  volumes:
+    - name: host-root-volume
+      hostPath:
+        path: / # Mount the host's root filesystem
+        type: Directory
+  restartPolicy: Always # Keep trying if it fails
